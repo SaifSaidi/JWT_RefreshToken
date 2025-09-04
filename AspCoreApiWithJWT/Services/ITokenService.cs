@@ -7,7 +7,6 @@ namespace AspCoreApiWithJWT.Services
     {
         string GenerateJwtToken(User user);
         RefreshToken GenerateRefreshToken(string ipAddress);
-        ClaimsPrincipal GetPrincipalFromExpiredToken(string token);
     }
 
 }

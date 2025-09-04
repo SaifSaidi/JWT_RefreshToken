@@ -11,10 +11,12 @@ namespace AspCoreApiWithJWT.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(IUserService userService)
+        public AuthController(IUserService userService, ILogger<AuthController> logger)
         {
             _userService = userService;
+            _logger = logger;
         }
 
         [HttpPost("Login")]
@@ -25,8 +27,11 @@ namespace AspCoreApiWithJWT.Controllers
 
             if (response == null)
                 return BadRequest(new { message = "Username or password is incorrect" });
-             
-            SetRefreshTokenCookie(response.RefreshToken, response.Expires);
+
+            if (response.RefreshToken != null)
+            {
+                SetRefreshTokenCookie(response.RefreshToken, response.Expires);
+            }
 
             return Ok(response);
         }
@@ -34,20 +39,15 @@ namespace AspCoreApiWithJWT.Controllers
         [HttpPost("Register")]
         public async Task<IActionResult> Register(RegisterRequest model)
         {
-            try
-            {
-                var ipAddress = GetIpAddress();
-                
-                var response = await _userService.Register(model, ipAddress);
+            var ipAddress = GetIpAddress();
+            var response = await _userService.Register(model, ipAddress);
 
+            if (response.RefreshToken != null)
+            {
                 SetRefreshTokenCookie(response.RefreshToken, response.Expires);
+            }
 
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            return Ok(response);
         }
 
         [HttpPost("Refresh-Token")]
@@ -59,69 +59,50 @@ namespace AspCoreApiWithJWT.Controllers
                 return BadRequest(new { message = "Token is required" });
 
             var ipAddress = GetIpAddress();
+            var response = await _userService.RefreshToken(refreshToken, ipAddress);
 
-            try
+            if (response.RefreshToken != null)
             {
-                var response = await _userService.RefreshToken(refreshToken, ipAddress);
- 
                 SetRefreshTokenCookie(response.RefreshToken, response.Expires);
- 
-                return Ok(response);
             }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+
+            return Ok(response);
         }
 
         [Authorize]
         [HttpPost("Revoke-Token")]
-        public async Task<IActionResult> RevokeToken([FromBody] string? refreshToken)
+        public async Task<IActionResult> RevokeToken()
         {
-            // Accept token from request body or cookie
-             
-            var token = refreshToken ?? Uri.UnescapeDataString(Request.Cookies["refreshToken"]);
-             
+            // Accept token from cookie
+            var token = Request.Cookies["refreshToken"];
 
             if (string.IsNullOrEmpty(token))
                 return BadRequest(new { message = "Token is required" });
 
             var ipAddress = GetIpAddress();
 
-            try
-            {
-                await _userService.RevokeToken(token, ipAddress);
-                return Ok(new { message = "Token revoked" });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
+            await _userService.RevokeToken(token, ipAddress);
+            return Ok(new { message = "Token revoked" });
         }
 
         // Helper methods
         private void SetRefreshTokenCookie(string token, DateTime expire)
         {
-            Console.WriteLine($"Setting refresh token cookie: {token} with expiration: {expire}");
+            _logger.LogInformation($"Setting refresh token cookie with expiration: {expire}");
             var cookieOptions = new CookieOptions
             {
                 HttpOnly = true,
-                Expires = expire, 
+                Expires = expire,
                 SameSite = SameSiteMode.Strict,
                 Secure = true // Set to true in production with HTTPS
             };
             Response.Cookies.Append("refreshToken", token, cookieOptions);
-         }
+        }
 
         private string GetIpAddress()
         {
-            // Get client IP address from the request
-            if (Request.Headers.ContainsKey("X-Forwarded-For"))
-                return Request.Headers["X-Forwarded-For"];
-            else
-                return HttpContext.Connection.RemoteIpAddress?.MapToIPv4().ToString() ?? "unknown";
+            return HttpContext.Items["IpAddress"]?.ToString() ?? "unknown";
         }
     }
-
 }
 

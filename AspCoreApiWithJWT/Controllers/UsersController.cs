@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using AspCoreApiWithJWT.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,7 @@ namespace AspCoreApiWithJWT.Controllers
             _userService = userService;
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -23,21 +25,17 @@ namespace AspCoreApiWithJWT.Controllers
             return Ok(users);
         }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(int id)
-        {
-            var user = await _userService.GetById(id);
-            if (user == null)
-                return NotFound();
-
-            return Ok(user);
-        }
-
+  
         [HttpGet("profile")]
         public async Task<IActionResult> GetProfile()
         {
             // Get the current user ID from the claims
-            var userId = int.Parse(User.FindFirst("id")?.Value);
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userIdValue == null || !int.TryParse(userIdValue, out var userId))
+            {
+                return Unauthorized();
+            }
+
             var user = await _userService.GetById(userId);
 
             if (user == null)
@@ -46,6 +44,5 @@ namespace AspCoreApiWithJWT.Controllers
             return Ok(user);
         }
     }
-
 }
 

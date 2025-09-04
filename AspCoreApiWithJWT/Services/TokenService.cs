@@ -9,14 +9,16 @@ namespace AspCoreApiWithJWT.Services
 {
     public class TokenService(IConfiguration configuration) : ITokenService
     {
-        private const int TokenExpirationMinutes = 60; // Token expiration time in minutes
-        private const int RefreshTokenExpirationDays = 7; // Refresh token valid for 7 days
-
         public string GenerateJwtToken(User user)
         {
+            var jwtKey = configuration["Jwt:Key"];
+            if (string.IsNullOrEmpty(jwtKey))
+            {
+                throw new InvalidOperationException("JWT key is not configured.");
+            }
 
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(configuration["Jwt:Key"]);
+            var key = Encoding.ASCII.GetBytes(jwtKey);
             var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
@@ -24,10 +26,11 @@ namespace AspCoreApiWithJWT.Services
                 new Claim(ClaimTypes.Email, user.Email),
                 new Claim(ClaimTypes.Role, user.Role.ToString())
             };
+
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddMinutes(TokenExpirationMinutes),
+                Expires = DateTime.UtcNow.AddMinutes(Convert.ToDouble(configuration["Jwt:TokenExpirationMinutes"])),
                 Issuer = configuration["Jwt:Issuer"],
                 Audience = configuration["Jwt:Audience"],
                 SigningCredentials = new SigningCredentials(
@@ -49,38 +52,10 @@ namespace AspCoreApiWithJWT.Services
             return new RefreshToken
             {
                 Token = Convert.ToBase64String(randomBytes),
-                Expires = DateTime.UtcNow.AddDays(RefreshTokenExpirationDays).ToLocalTime(), 
-                Created = DateTime.UtcNow.ToLocalTime(),
+                Expires = DateTime.UtcNow.AddDays(Convert.ToDouble(configuration["Jwt:RefreshTokenExpirationDays"])),
+                Created = DateTime.UtcNow,
                 CreatedByIp = ipAddress
             };
         }
-
-        public ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
-        {
-            var tokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = false,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = configuration["Jwt:Issuer"],
-                ValidAudience = configuration["Jwt:Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(
-                    Encoding.ASCII.GetBytes(configuration["Jwt:Key"]))
-            };
-
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
-
-            if (securityToken is not JwtSecurityToken jwtSecurityToken ||
-                !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256,
-                    StringComparison.InvariantCultureIgnoreCase))
-            {
-                throw new SecurityTokenException("Invalid token");
-            }
-
-            return principal;
-        }
     }
-
 }

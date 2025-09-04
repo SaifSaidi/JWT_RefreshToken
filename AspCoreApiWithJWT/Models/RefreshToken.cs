@@ -9,10 +9,10 @@ namespace AspCoreApiWithJWT.Models
         [JsonIgnore]
         public int Id { get; set; }
 
-        public string Token { get; set; }
+        public string Token { get; set; } = string.Empty;
         public DateTime Expires { get; set; }
         public DateTime Created { get; set; }
-        public string CreatedByIp { get; set; }
+        public string CreatedByIp { get; set; } = string.Empty;
         public DateTime? Revoked { get; set; }
         public string? RevokedByIp { get; set; }
         public string? ReplacedByToken { get; set; }
@@ -26,7 +26,7 @@ namespace AspCoreApiWithJWT.Models
         // Foreign key relationship
         public int UserId { get; set; }
         [JsonIgnore]
-        public User User { get; set; }
+        public User User { get; set; } = null!;
     }
 
 }
